@@ -178,20 +178,27 @@ class KB():
                         loc.has_dead_wumpus = False
 
 class AgentState():
-    def __init__(self, x = 0, y = 0, d = 0):
+    def __init__(self, x = 0, y = 0, d = 0, c = 0):
         self.direction = d
         self.has_gold = False
         self.has_arrow = True
         self.x_pos = x
         self.y_pos = y
+        self.cost = c
 
     def __eq__(self, other):
-        if self.x_pos == other.x_pos and self.y_pos == self.other and self.direction == other.direction:
+        if self.x_pos == other.x_pos and self.y_pos == other.y_pos and self.direction == other.direction:
             return True
         return False
 
     def __hash__(self):
         return hash((self.x_pos, self.y_pos, self.direction))
+
+    def __repr__(self):
+        return "State at {0} facing {1}".format(self.get_location(), self.direction)
+
+    def __lt__(self, other):
+        return self.cost < other.cost
 
     def get_location(self):
         return (self.x_pos, self.y_pos)
@@ -207,7 +214,7 @@ class AgentState():
             if orientation == 180:
                 orientation = 0
         if test:
-            return orientation
+            return AgentState(self.x_pos, self.y_pos, orientation)
         self.direction = orientation
 
     def go(self, direction, test = False):
@@ -254,48 +261,49 @@ class ashtabna_ExplorerAgent(ExplorerAgent):
         self.position = self.kb.get_location()
         self.action = "Forward" #random.choice(self.possible_actions)
 
-        visited_safe_locs = []
+        safe_locs = []
         unvisited_safe_locs = []
         possible_wumpus_locs = []
 
         for row in range(4):
             for col in range(4):
-                if self.kb.is_visited(row, col):
-                    if self.kb.is_safe(row, col):
-                        visited_safe_locs.append((row, col))
-                else:
-                    unvisited_safe_locs.append((row, col))
-                    if self.kb.has_wumpus(row, col):
-                        possible_wumpus_locs.append((row, col))
+                if self.kb.is_safe(row, col):
+                    safe_locs.append((row, col))
+
+                    if not self.kb.is_visited(row, col):
+                        unvisited_safe_locs.append((row, col))
+
+                elif self.kb.has_wumpus(row, col):
+                    possible_wumpus_locs.append((row, col))
 
         if percept[2] == "Glitter":
             self.action = "Grab"
             self.goal = "Climb"
-            route = self.make_plan([self.start], visited_safe_locs)
+            route = self.make_plan([self.start], safe_locs)
             self.plan.extend(route)
             self.plan.append("Climb")
             return self.action
 
         if not self.plan:
-            plan = self.make_plan(unvisited_safe_locs, visited_safe_locs)
+            plan = self.make_plan(unvisited_safe_locs, safe_locs)
             self.plan = plan # is empty if no safe plan
 
         # if there is no safe route, try to shoot wumpus
         if not self.plan and self.kb.has_arrow():
             print("We can try to kill a wumpus!")
             for loc in possible_wumpus_locs:
-                row = loc.x_pos
-                col = loc.y_pos
+                row = loc[0]
+                col = loc[1]
 
         # if there is still no plan, climb out of cave
         if not self.plan:
-            plan = self.make_plan([self.start], visited_safe_locs)
+            plan = self.make_plan([self.start], safe_locs)
             plan.append("Climb")
             self.plan = plan
 
-        action = self.plan.pop(0)
-        print("I'm going to " + action)
-        return action
+        self.action = self.plan.pop(0)
+        print("I'm going to " + self.action)
+        return self.action
 
     def get_valid_actions(self, location):
         actions = ["TurnLeft", "TurnRight", "Forward"]
@@ -322,8 +330,7 @@ class ashtabna_ExplorerAgent(ExplorerAgent):
         if action == "Forward":
             return state.go(state.direction, test = True)
         elif action.startswith("Turn"):
-            state.change_orientation(action)
-        return state
+            return state.change_orientation(action, test = True)
 
     def get_distance(self, loc, dest):
         return abs(loc[0] - dest[0]) + abs(loc[1] - dest[1])
@@ -335,40 +342,53 @@ class ashtabna_ExplorerAgent(ExplorerAgent):
         explored = {} # stores best paths to all locations
         goal = dest
         curr_state = self.kb.get_state()
-        frontier.put((curr_state, 0))
-        COST = 1
-        STATE = 0
-        explored[curr_state] = ["Grab"]
+        frontier.put(curr_state)
+        explored[curr_state] = []
 
         'frontier = (state, cost)'
         'explored = state : "TurnLeft", "Forward"'
 
+        # while not frontier.empty():
+        #     state = frontier.get()[STATE]
+        #     loc = state.get_location()
+        #
+        #     if state in goal:
+        #         return explored[state]
+        #
+        #     explored.add(state)
+        #     for action in self.get_valid_actions(state):
+        #         result = self.take_action(state, action)
+        #         if result not in explored and result not in frontier:
+        #             frontier.append(result)
+        #         elif result in frontier:
+        #             if self.get_distance(loc, goal[0]) < frontier[result]:
+        #                 del frontier[result]
+        #                 frontier.append(result)
+
         # while there are locations to expand
-        while not frontier.empty() and frontier.queue[0][COST] < cost:
-            state = frontier.get()[STATE]
+        while not frontier.empty() and frontier.queue[0].cost < cost:
+            state = frontier.get()
+            loc = state.get_location()
+
+            if loc in goal:
+                return explored[state]
+
             actions = self.get_valid_actions(state)
 
             # loops through all squares connected to shortest square
             for action in actions:
-                if not explored[state]:
-                    frontier_path = [action]
-                    frontier_cost = 1
-                else:
-                    frontier_path = explored[state] + [action]
-                    frontier_cost = len(frontier_path)
+                frontier_path = explored[state] + [action]
+                frontier_cost = len(frontier_path)
                 result = self.take_action(state, action)
-                loc = state.get_location()
-                allowed = result.get_location() in world
-                new = loc not in explored.keys()
-                # shorter = frontier_cost < len(explored[loc])
 
                 # if this square hasn't been explored yet or we encountered a shorter path to this explored square
-                if result.get_location() in world and (state not in explored.keys() or frontier_cost < len(explored[state])):
-                    frontier.put((result, frontier_cost + self.get_distance(loc, goal[0]))) # places shortest on frontier
-                    explored[state] = frontier_path # marks city as explored
+                if result.get_location() in world and (result not in explored.keys() or frontier_cost < len(explored[result])):
+                    path_cost = self.get_distance(loc, goal[0]) + frontier_cost
+                    result.cost = path_cost
+                    frontier.put(result) # places shortest on frontier
+                    explored[result] = frontier_path # marks location as explored
 
-                    # if this city leads to goal and path to get there is shorter than current solution
+                    # if this location leads to goal and path to get there is shorter than current solution
                     if loc in goal and frontier_cost < cost:
                         path = frontier_path
-                        cost = frontier_cost
         return path
