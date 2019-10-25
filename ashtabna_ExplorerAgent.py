@@ -28,7 +28,6 @@ class Inference:
         self.has_breeze = None
         self.has_stench = None
         self.has_live_wumpus = None
-        self.has_dead_wumpus = None
         self.has_exit = False
         self.has_obstacle = None
         self.has_visited = False
@@ -44,7 +43,6 @@ class Inference:
             self.has_visited = True
             self.has_gold = False
             self.has_live_wumpus = False
-            self.has_dead_wumpus = False
 
     def __repr__(self):
         return "Inference at {0}. Has Wumpus: {1} Has obstacle: {2} Has pit: {3}".format((self.x_pos, self.y_pos),
@@ -139,7 +137,6 @@ class KB():
         if touch == "Bump":
             curr_loc.has_obstacle = True
             curr_loc.has_live_wumpus = False
-            curr_loc.has_dead_wumpus = False
             curr_loc.has_pit = False
             curr_loc.has_visited = True
             self.agent.undo() # movement unsuccessful. Change current location to previous location
@@ -149,8 +146,8 @@ class KB():
                 curr_loc.has_gold = True
 
             if sound == "Scream" and action == "Shoot":
-                wumpus_loc = self.agent.go(self.direction, test=True)
-                wumpus_loc.has_dead_wumpus = True
+                wumpus_loc = self.agent.go(self.agent.direction, test=True)
+                wumpus_loc.has_live_wumpus = False
                 for row in range(len(self.world)):
                     for col in range(len(self.world[row])):
                         self.world[row][col].has_live_wumpus = False
@@ -178,14 +175,18 @@ class KB():
                         curr_loc.has_stench = True
                         if loc.has_live_wumpus == "Maybe":
                             loc.has_live_wumpus = True
-                            loc.has_dead_wumpus = False
+
+                            # no other locations can have a wumpus
+                            for row in range(len(self.world)):
+                                for col in range(len(self.world[row])):
+                                    if loc.has_live_wumpus != True:
+                                        loc.has_live_wumpus = False
 
                         elif not loc.has_visited and loc.has_live_wumpus is None:
                             loc.has_live_wumpus = "Maybe"
                     else:
                         if loc.has_live_wumpus == "Maybe" or not loc.has_visited:
                             loc.has_live_wumpus = False
-                            loc.has_dead_wumpus = False
 
 
 class AgentState():
@@ -231,13 +232,18 @@ class AgentState():
             orientation -= 45
             if orientation == -45:
                 orientation = 135
-        else:
+        elif action == "TurnLeft":
             orientation += 45
             if orientation == 180:
                 orientation = 0
         if test:
             return AgentState(self.x_pos, self.y_pos, orientation)
         self.direction = orientation
+
+    def reverse(self):
+        self.direction += 90
+        if self.direction >= 180:
+            self.direction -= 180
 
     def go(self, direction, test=False):
         new_x = self.x_pos
@@ -253,7 +259,7 @@ class AgentState():
 
         if is_valid(new_x, new_y):
             if test:
-                return AgentState(new_x, new_y, self.direction)
+                return AgentState(new_x, new_y, direction)
             else:
                 self.x_pos = new_x
                 self.y_pos = new_y
@@ -278,7 +284,7 @@ class ashtabna_ExplorerAgent(ExplorerAgent):
         self.kb = KB()
         self.action = None
         self.plan = []  # stores a list of actions
-        self.start = (0, 0)
+        self.start = AgentState(0, 0)
         self.position = self.start
 
     """If there are no safe squares to explore, the next step—if the agent still has an arrow—is to try to make a square safe by shooting at one of the possible 
@@ -290,7 +296,6 @@ class ashtabna_ExplorerAgent(ExplorerAgent):
     def program(self, percept):
         self.kb.tell(percept, self.action)
         self.position = self.kb.get_location()
-        print("I'm at " + str(self.position))
 
         safe_locs = []
         unsafe_locs = []
@@ -301,19 +306,25 @@ class ashtabna_ExplorerAgent(ExplorerAgent):
             for col in range(4):
 
                 if self.kb.is_safe(row, col):
-                    safe_locs.append((row, col))
+                    safe_locs.append(AgentState(row, col, UP))
+                    safe_locs.append(AgentState(row, col, DOWN))
+                    safe_locs.append(AgentState(row, col, LEFT))
+                    safe_locs.append(AgentState(row, col, RIGHT))
 
                     if not self.kb.is_visited(row, col):
-                        unvisited_safe_locs.append((row, col))
+                        unvisited_safe_locs.append(AgentState(row, col, UP))
+                        unvisited_safe_locs.append(AgentState(row, col, DOWN))
+                        unvisited_safe_locs.append(AgentState(row, col, LEFT))
+                        unvisited_safe_locs.append(AgentState(row, col, RIGHT))
 
                 elif not self.kb.is_safe(row, col):
-                    unsafe_locs.append((row, col))
+                    unsafe_locs.append(AgentState(row, col, UP))
+                    unsafe_locs.append(AgentState(row, col, DOWN))
+                    unsafe_locs.append(AgentState(row, col, LEFT))
+                    unsafe_locs.append(AgentState(row, col, RIGHT))
 
                     if self.kb.has_wumpus(row, col):
-                        possible_wumpus_locs.append((row, col))
-
-        if self.position == (2,1):
-            self.kb.is_safe(2, 1)
+                        possible_wumpus_locs.append(AgentState(row, col))
 
         # if treasure here, grab and plan shortest route to exit
         if percept[2] == "Glitter":
@@ -325,16 +336,15 @@ class ashtabna_ExplorerAgent(ExplorerAgent):
 
         # if no treasure, plan shortest route to safe location
         if not self.plan:
-            plan = self.make_plan(unvisited_safe_locs, safe_locs)
-            self.plan = plan  # is empty if no safe plan
+            self.plan = self.make_plan(unvisited_safe_locs, safe_locs)
 
         # if there is no safe route, guess where wumpus is and shoot
         if not self.plan and self.kb.has_arrow():
-            print("We can try to kill a wumpus!")
-            for loc in possible_wumpus_locs:
-                row = loc[0]
-                col = loc[1]
+            plan = self.plan_shot(possible_wumpus_locs, safe_locs)
+            plan.append("Shoot")
+            self.plan.extend(plan)
 
+        # if there is no way to safely shoot wumpus
         if not self.plan:
             plan = self.make_plan(unsafe_locs, safe_locs)
             self.plan.extend(plan)
@@ -377,7 +387,33 @@ class ashtabna_ExplorerAgent(ExplorerAgent):
             return state.change_orientation(action, test=True)
 
     def get_distance(self, loc, dest):
-        return abs(loc[0] - dest[0]) + abs(loc[1] - dest[1])
+        return abs(loc.x_pos - dest.x_pos) + abs(loc.y_pos - dest.y_pos)
+
+    def plan_shot(self, wumpus_locs, world):
+        shooting_locs = [] # positions from which agent can shoot at wumpus
+
+        # compute all locations surrounding and facing wumpus
+        for state in wumpus_locs:
+            loc = state.get_location()
+            row = loc[0]
+            col = loc[1]
+            wumpus = AgentState(row, col)
+
+            directions = [UP, DOWN, LEFT, RIGHT]
+
+            for direction in directions:
+                pos = wumpus.go(direction, test=True)
+                if pos:
+                    pos.reverse()
+                    shooting_locs.append(pos)
+
+        return self.make_plan(shooting_locs, world)
+
+    def is_allowed(self, loc, world):
+        for room in world:
+            if loc == room.get_location():
+                return True
+        return False
 
     def make_plan(self, dest, world):
         paths = []
@@ -398,7 +434,7 @@ class ashtabna_ExplorerAgent(ExplorerAgent):
                 state = frontier.get()
                 loc = state.get_location()
 
-                if loc == goal:
+                if state == goal:
                     return explored[state]
 
                 actions = self.get_valid_actions(state)
@@ -411,17 +447,19 @@ class ashtabna_ExplorerAgent(ExplorerAgent):
                     result_loc = result.get_location()
 
                     # if this square hasn't been explored yet or we encountered a shorter path to this explored square
-                    if result_loc in world and (result not in explored.keys() or frontier_cost < len(explored[result])):
-                        path_cost = self.get_distance(result_loc, goal) + frontier_cost
+                    if result in world and (result not in explored.keys() or frontier_cost < len(explored[result])):
+                        path_cost = self.get_distance(result, goal) + frontier_cost
                         result.cost = path_cost
                         frontier.put(result)  # places shortest on frontier
                         explored[result] = frontier_path  # marks location as explored
 
                         # if this location leads to goal and path to get there is shorter than current solution
-                        if result_loc == goal and frontier_cost < cost:
+                        if result == goal and frontier_cost < cost:
                             path = frontier_path
                             cost = frontier_cost
 
             paths.append((path, cost))
 
-        return min(paths, key = lambda t: t[1])[0]
+        if paths:
+            return min(paths, key = lambda t: t[1])[0]
+        return paths
