@@ -46,6 +46,12 @@ class Inference:
             self.has_live_wumpus = False
             self.has_dead_wumpus = False
 
+    def __repr__(self):
+        return "Inference at {0}. Has Wumpus: {1} Has obstacle: {2} Has pit: {3}".format((self.x_pos, self.y_pos),
+                                                                                         self.has_live_wumpus,
+                                                                                         self.has_obstacle,
+                                                                                         self.has_pit)
+
 
 class KB():
 
@@ -120,6 +126,7 @@ class KB():
 
         self.make_inference(percept, action)
         loc.has_visited = True
+        loc.has_obstacle = False
 
     def make_inference(self, percept, action):
         smell = percept[0]
@@ -131,59 +138,54 @@ class KB():
 
         if touch == "Bump":
             curr_loc.has_obstacle = True
+            curr_loc.has_live_wumpus = False
+            curr_loc.has_dead_wumpus = False
+            curr_loc.has_pit = False
             curr_loc.has_visited = True
-            # movement unsuccessful. Change current location to previous location
-            if self.direction == UP:
-                self.y_pos -= 1
-            elif self.direction == DOWN:
-                self.y_pos += 1
-            elif self.direction == RIGHT:
-                self.x_pos -= 1
-            elif self.direction == LEFT:
-                self.x_pos += 1
+            self.agent.undo() # movement unsuccessful. Change current location to previous location
 
-        if sight == "Glitter":
-            curr_loc.has_gold = True
+        else:
+            if sight == "Glitter":
+                curr_loc.has_gold = True
 
-        if sound == "Scream" and action == "Shoot":
-            wumpus_loc = self.agent.go(self.direction, test=True)
-            wumpus_loc.has_dead_wumpus = True
-            for row in range(len(self.world)):
-                for col in range(len(self.world[row])):
-                    self.world[row][col].has_live_wumpus = False
+            if sound == "Scream" and action == "Shoot":
+                wumpus_loc = self.agent.go(self.direction, test=True)
+                wumpus_loc.has_dead_wumpus = True
+                for row in range(len(self.world)):
+                    for col in range(len(self.world[row])):
+                        self.world[row][col].has_live_wumpus = False
 
-        directions = [LEFT, RIGHT, UP, DOWN]
+            directions = [LEFT, RIGHT, UP, DOWN]
 
-        for direction in directions:
-            state = self.agent.go(direction, test=True)
-            if state:
-                loc = self.world[state.x_pos][state.y_pos]
-                if atmos == "Breeze":
-                    curr_loc.has_breeze = True
-                    if loc.has_pit == "Maybe":
-                        loc.has_pit = True
-                    elif not loc.has_visited:
-                        loc.has_pit = "Maybe"
-                else:
-                    if not loc.has_visited:
-                        loc.has_pit = False
+            # make deductions for valid locations in all directions
+            for direction in directions:
+                state = self.agent.go(direction, test=True)
 
-                if smell == "Stench":
-                    curr_loc.has_stench = True
-                    if loc.has_live_wumpus == "Maybe":
-                        loc.has_live_wumpus = True
+                # if valid location
+                if state:
+                    loc = self.world[state.x_pos][state.y_pos]
+                    if atmos == "Breeze":
+                        curr_loc.has_breeze = True
+                        if loc.has_pit == "Maybe":
+                            loc.has_pit = True
+                        elif not loc.has_visited and loc.has_pit is None:
+                            loc.has_pit = "Maybe"
+                    else:
+                        if loc.has_pit == "Maybe" or not loc.has_visited:
+                            loc.has_pit = False
 
-                        for row in range(len(self.world)):
-                            for col in range(len(self.world[row])):
-                                if self.world[row][col].has_live_wumpus == "Maybe":
-                                    self.world[row][col].has_live_wumpus = False
+                    if smell == "Stench":
+                        curr_loc.has_stench = True
+                        if loc.has_live_wumpus == "Maybe":
+                            loc.has_live_wumpus = True
+                            loc.has_dead_wumpus = False
 
-                    elif not loc.has_visited:
-                        loc.has_live_wumpus = "Maybe"
-                else:
-                    if not loc.has_visited:
-                        loc.has_live_wumpus = False
-                        loc.has_dead_wumpus = False
+                        elif not loc.has_visited and loc.has_live_wumpus is None:
+                            loc.has_live_wumpus = "Maybe"
+                    else:
+                        if loc.has_live_wumpus == "Maybe" or not loc.has_visited:
+                            loc.has_live_wumpus = False
+                            loc.has_dead_wumpus = False
 
 
 class AgentState():
@@ -204,13 +206,24 @@ class AgentState():
         return hash((self.x_pos, self.y_pos, self.direction))
 
     def __repr__(self):
-        return "State at {0} facing {1}".format(self.get_location(), self.direction)
+        direction = self.get_direction()
+        return "State at {0} facing {1}".format(self.get_location(), direction)
 
     def __lt__(self, other):
         return self.cost < other.cost
 
     def get_location(self):
         return (self.x_pos, self.y_pos)
+
+    def get_direction(self):
+        if self.direction == UP:
+            return "up"
+        elif self.direction == DOWN:
+            return "down"
+        elif self.direction == LEFT:
+            return "left"
+        elif self.direction == RIGHT:
+            return "right"
 
     def change_orientation(self, action, test=False):
         orientation = self.direction
@@ -247,6 +260,16 @@ class AgentState():
 
         return None
 
+    def undo(self):
+        if self.direction == UP:
+            self.y_pos -= 1
+        elif self.direction == DOWN:
+            self.y_pos += 1
+        elif self.direction == RIGHT:
+            self.x_pos -= 1
+        elif self.direction == LEFT:
+            self.x_pos += 1
+
 
 class ashtabna_ExplorerAgent(ExplorerAgent):
 
@@ -267,6 +290,7 @@ class ashtabna_ExplorerAgent(ExplorerAgent):
     def program(self, percept):
         self.kb.tell(percept, self.action)
         self.position = self.kb.get_location()
+        print("I'm at " + str(self.position))
 
         safe_locs = []
         unsafe_locs = []
@@ -275,6 +299,7 @@ class ashtabna_ExplorerAgent(ExplorerAgent):
 
         for row in range(4):
             for col in range(4):
+
                 if self.kb.is_safe(row, col):
                     safe_locs.append((row, col))
 
@@ -284,8 +309,11 @@ class ashtabna_ExplorerAgent(ExplorerAgent):
                 elif not self.kb.is_safe(row, col):
                     unsafe_locs.append((row, col))
 
-                elif self.kb.has_wumpus(row, col):
-                    possible_wumpus_locs.append((row, col))
+                    if self.kb.has_wumpus(row, col):
+                        possible_wumpus_locs.append((row, col))
+
+        if self.position == (2,1):
+            self.kb.is_safe(2, 1)
 
         # if treasure here, grab and plan shortest route to exit
         if percept[2] == "Glitter":
