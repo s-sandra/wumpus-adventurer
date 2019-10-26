@@ -17,19 +17,13 @@ def is_valid(x, y):
         return False
     if x > 3 or y > 3:
         return False
-    # if self.world[x][y].has_obstacle:
-    #     return False
     return True
 
 class Inference:
 
     def __init__(self, pos):
-        # self.has_gold = None
         self.has_pit = None
-        # self.has_breeze = None
-        # self.has_stench = None
         self.has_live_wumpus = None
-        # self.has_exit = False
         self.has_obstacle = None
         self.has_visited = False
 
@@ -56,7 +50,6 @@ class KB():
 
     def __init__(self):
         self.agent = AgentState()
-        # self.prev_action = None
         self.world = [[0 for row in range(4)] for col in range(4)]
         self.init_world()
 
@@ -116,9 +109,6 @@ class KB():
         if action == "Shoot":
             self.agent.has_arrow = False
 
-        # elif action == "Grab" and loc.has_gold:
-        #     self.has_gold = True
-
         elif action == "Forward":
             self.agent.go(self.agent.direction)
             loc = self.world[self.agent.x_pos][self.agent.y_pos]
@@ -145,8 +135,6 @@ class KB():
             self.agent.undo() # movement unsuccessful. Change current location to previous location
 
         else:
-            # if sight == "Glitter":
-            #     curr_loc.has_gold = True
             curr_loc.has_obstacle = False
 
             if action == "Shoot":
@@ -305,16 +293,11 @@ class ashtabna_ExplorerAgent(ExplorerAgent):
         self.goal = None
         self.position = self.start
 
-    """If this fails, the program looks for a square to 
-    explore that is not provably unsafe—that is, a square for which ASK(KB,¬OKt x,y) returns false. If there is no such square, then the mission is 
-    impossible and the agent retreats to [1, 1] and climbs out of the cave. """
-
     def program(self, percept):
         self.kb.tell(percept, self.action)
         self.position = self.kb.get_location()
 
         safe_locs = []
-        maybe_safe_locs = []
         unsafe_locs = []
         unvisited_safe_locs = []
         possible_wumpus_locs = []
@@ -328,12 +311,8 @@ class ashtabna_ExplorerAgent(ExplorerAgent):
 
                         if not self.kb.is_visited(row, col):
                             unvisited_safe_locs.append(location)
-
-                    elif not self.kb.is_safe(row, col):
+                    else:
                         unsafe_locs.append(location)
-
-                    elif not self.kb.maybe_safe(row, col):
-                        maybe_safe_locs.append(location)
 
                 if self.kb.has_wumpus(row, col):
                     possible_wumpus_locs.append(AgentState(row, col, UP))
@@ -354,13 +333,6 @@ class ashtabna_ExplorerAgent(ExplorerAgent):
             self.goal = "Exit"
             return self.action
 
-        # if plan was foiled by an obstacle
-        # if percept[3] == "Bump" and self.plan:
-        #     self.plan = []
-        #     route = self.make_plan([self.start], safe_locs)
-        #     self.plan.extend(route)
-        #     self.plan.append("Climb")
-
         # if no treasure, plan shortest route to safe location
         if not self.plan and not self.goal == "Exit":
             self.plan = self.make_plan(unvisited_safe_locs, safe_locs)
@@ -372,10 +344,6 @@ class ashtabna_ExplorerAgent(ExplorerAgent):
                 plan.append("Shoot")
                 self.plan = plan
 
-        # if there is no way to safely shoot wumpus, go to potentially safe location
-        if not self.plan and not self.goal == "Exit":
-            self.plan = self.make_plan(maybe_safe_locs, safe_locs)
-
         # if there is still no plan, climb out of cave
         if not self.plan:
             plan = self.make_plan([self.start], safe_locs)
@@ -383,7 +351,6 @@ class ashtabna_ExplorerAgent(ExplorerAgent):
             self.plan = plan
 
         self.action = self.plan.pop(0)
-        print("I'm going to " + self.action)
         return self.action
 
     def get_valid_actions(self, location):
@@ -399,10 +366,7 @@ class ashtabna_ExplorerAgent(ExplorerAgent):
     def direction_valid(self, location, direction):
         loc = location.go(direction, test=True)
         if loc:
-            x_pos = loc.get_location()[0]
-            y_pos = loc.get_location()[1]
-            if self.kb.is_safe(x_pos, y_pos):
-                return True
+            return True
         return False
 
     def take_action(self, state, action):
@@ -468,7 +432,6 @@ class ashtabna_ExplorerAgent(ExplorerAgent):
             # while there are locations to expand
             while not frontier.empty() and frontier.queue[0].cost < cost:
                 state = frontier.get()
-                loc = state.get_location()
 
                 if self.is_goal(state, goal, exact):
                     return explored[state]
@@ -480,7 +443,6 @@ class ashtabna_ExplorerAgent(ExplorerAgent):
                     frontier_path = explored[state] + [action]
                     frontier_cost = len(frontier_path)
                     result = self.take_action(state, action)
-                    result_loc = result.get_location()
 
                     # if this square hasn't been explored yet or we encountered a shorter path to this explored square
                     if self.is_allowed(result, world, exact) and (result not in explored.keys() or frontier_cost < len(explored[result])):
