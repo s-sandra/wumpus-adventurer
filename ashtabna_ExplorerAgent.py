@@ -10,6 +10,7 @@ UP = 0
 DOWN = 90
 LEFT = 135
 RIGHT = 45
+directions = [UP, DOWN, LEFT, RIGHT]
 
 def is_valid(x, y):
     if x < 0 or y < 0:
@@ -23,12 +24,12 @@ def is_valid(x, y):
 class Inference:
 
     def __init__(self, pos):
-        self.has_gold = None
+        # self.has_gold = None
         self.has_pit = None
-        self.has_breeze = None
-        self.has_stench = None
+        # self.has_breeze = None
+        # self.has_stench = None
         self.has_live_wumpus = None
-        self.has_exit = False
+        # self.has_exit = False
         self.has_obstacle = None
         self.has_visited = False
 
@@ -37,11 +38,11 @@ class Inference:
 
         # if starting index
         if self.x_pos == 0 and self.y_pos == 0:
-            self.has_exit = True
+            # self.has_exit = True
             self.has_pit = False
             self.has_obstacle = False
             self.has_visited = True
-            self.has_gold = False
+            # self.has_gold = False
             self.has_live_wumpus = False
 
     def __repr__(self):
@@ -110,10 +111,10 @@ class KB():
         loc = self.world[self.agent.x_pos][self.agent.y_pos]
 
         if action == "Shoot":
-            self.has_arrow = False
+            self.agent.has_arrow = False
 
-        elif action == "Grab" and loc.has_gold:
-            self.has_gold = True
+        # elif action == "Grab" and loc.has_gold:
+        #     self.has_gold = True
 
         elif action == "Forward":
             self.agent.go(self.agent.direction)
@@ -124,7 +125,6 @@ class KB():
 
         self.make_inference(percept, action)
         loc.has_visited = True
-        loc.has_obstacle = False
 
     def make_inference(self, percept, action):
         smell = percept[0]
@@ -142,8 +142,9 @@ class KB():
             self.agent.undo() # movement unsuccessful. Change current location to previous location
 
         else:
-            if sight == "Glitter":
-                curr_loc.has_gold = True
+            # if sight == "Glitter":
+            #     curr_loc.has_gold = True
+            curr_loc.has_obstacle = False
 
             if sound == "Scream" and action == "Shoot":
                 wumpus_loc = self.agent.go(self.agent.direction, test=True)
@@ -151,8 +152,6 @@ class KB():
                 for row in range(len(self.world)):
                     for col in range(len(self.world[row])):
                         self.world[row][col].has_live_wumpus = False
-
-            directions = [LEFT, RIGHT, UP, DOWN]
 
             # make deductions for valid locations in all directions
             for direction in directions:
@@ -232,7 +231,7 @@ class AgentState():
             orientation -= 45
             if orientation == -45:
                 orientation = 135
-        elif action == "TurnLeft":
+        elif action == "TurnRight":
             orientation += 45
             if orientation == 180:
                 orientation = 0
@@ -287,9 +286,7 @@ class ashtabna_ExplorerAgent(ExplorerAgent):
         self.start = AgentState(0, 0)
         self.position = self.start
 
-    """If there are no safe squares to explore, the next step—if the agent still has an arrow—is to try to make a square safe by shooting at one of the possible 
-    wumpus locations. These are determined by asking where ASK(KB,¬Wx,y) is false—that is, where it is not known that there is not a wumpus. The function 
-    PLAN-SHOT (not shown) uses PLAN-ROUTE to plan a sequence of actions that will line up this shot. If this fails, the program looks for a square to 
+    """If this fails, the program looks for a square to 
     explore that is not provably unsafe—that is, a square for which ASK(KB,¬OKt x,y) returns false. If there is no such square, then the mission is 
     impossible and the agent retreats to [1, 1] and climbs out of the cave. """
 
@@ -304,27 +301,18 @@ class ashtabna_ExplorerAgent(ExplorerAgent):
 
         for row in range(4):
             for col in range(4):
-
+                location = AgentState(row, col)
                 if self.kb.is_safe(row, col):
-                    safe_locs.append(AgentState(row, col, UP))
-                    safe_locs.append(AgentState(row, col, DOWN))
-                    safe_locs.append(AgentState(row, col, LEFT))
-                    safe_locs.append(AgentState(row, col, RIGHT))
+                    safe_locs.append(location)
 
                     if not self.kb.is_visited(row, col):
-                        unvisited_safe_locs.append(AgentState(row, col, UP))
-                        unvisited_safe_locs.append(AgentState(row, col, DOWN))
-                        unvisited_safe_locs.append(AgentState(row, col, LEFT))
-                        unvisited_safe_locs.append(AgentState(row, col, RIGHT))
+                        unvisited_safe_locs.append(location)
 
                 elif not self.kb.is_safe(row, col):
-                    unsafe_locs.append(AgentState(row, col, UP))
-                    unsafe_locs.append(AgentState(row, col, DOWN))
-                    unsafe_locs.append(AgentState(row, col, LEFT))
-                    unsafe_locs.append(AgentState(row, col, RIGHT))
+                    unsafe_locs.append(location)
 
                     if self.kb.has_wumpus(row, col):
-                        possible_wumpus_locs.append(AgentState(row, col))
+                        possible_wumpus_locs.append(location)
 
         # if treasure here, grab and plan shortest route to exit
         if percept[2] == "Glitter":
@@ -362,23 +350,17 @@ class ashtabna_ExplorerAgent(ExplorerAgent):
     def get_valid_actions(self, location):
         actions = ["TurnLeft", "TurnRight", "Forward"]
 
-        # if you can't go right
-        if location.direction == RIGHT and not location.go(RIGHT, test=True):
-            actions.remove("Forward")
-
-        # if you can't go left
-        if location.direction == LEFT and not location.go(LEFT, test=True):
-            actions.remove("Forward")
-
-        # if you can't go up
-        if location.direction == UP and not location.go(UP, test=True):
-            actions.remove("Forward")
-
-        # if you can't go down
-        if location.direction == DOWN and not location.go(DOWN, test=True):
-            actions.remove("Forward")
+        for direction in directions:
+            if direction == location.direction:
+                if not self.direction_valid(location, direction):
+                    actions.remove("Forward")
 
         return actions
+
+    def direction_valid(self, location, direction):
+        if location.go(direction, test=True):
+            return True
+        return False
 
     def take_action(self, state, action):
         if action == "Forward":
@@ -399,23 +381,34 @@ class ashtabna_ExplorerAgent(ExplorerAgent):
             col = loc[1]
             wumpus = AgentState(row, col)
 
-            directions = [UP, DOWN, LEFT, RIGHT]
-
             for direction in directions:
                 pos = wumpus.go(direction, test=True)
                 if pos:
                     pos.reverse()
                     shooting_locs.append(pos)
 
-        return self.make_plan(shooting_locs, world)
+        return self.make_plan(shooting_locs, world, exact=True)
 
-    def is_allowed(self, loc, world):
-        for room in world:
-            if loc == room.get_location():
+    def is_allowed(self, state, world, exact):
+        if exact:
+            if state in world:
+                return True
+        else:
+            for loc in world:
+                if state.get_location() == loc.get_location():
+                    return True
+        return False
+
+    def is_goal(self, state, goal, exact):
+        if exact:
+            if state == goal:
+                return True
+        else:
+            if state.get_location() == goal.get_location():
                 return True
         return False
 
-    def make_plan(self, dest, world):
+    def make_plan(self, dest, world, exact=False):
         paths = []
         goals = dest
         curr_state = self.kb.get_state()
@@ -434,7 +427,7 @@ class ashtabna_ExplorerAgent(ExplorerAgent):
                 state = frontier.get()
                 loc = state.get_location()
 
-                if state == goal:
+                if self.is_goal(state, goal, exact):
                     return explored[state]
 
                 actions = self.get_valid_actions(state)
@@ -447,14 +440,14 @@ class ashtabna_ExplorerAgent(ExplorerAgent):
                     result_loc = result.get_location()
 
                     # if this square hasn't been explored yet or we encountered a shorter path to this explored square
-                    if result in world and (result not in explored.keys() or frontier_cost < len(explored[result])):
+                    if self.is_allowed(result, world, exact) and (result not in explored.keys() or frontier_cost < len(explored[result])):
                         path_cost = self.get_distance(result, goal) + frontier_cost
                         result.cost = path_cost
                         frontier.put(result)  # places shortest on frontier
                         explored[result] = frontier_path  # marks location as explored
 
                         # if this location leads to goal and path to get there is shorter than current solution
-                        if result == goal and frontier_cost < cost:
+                        if self.is_goal(result, goal, exact) and frontier_cost < cost:
                             path = frontier_path
                             cost = frontier_cost
 
