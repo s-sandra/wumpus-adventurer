@@ -147,8 +147,10 @@ class KB():
             curr_loc.has_obstacle = False
 
             if sound == "Scream" and action == "Shoot":
-                wumpus_loc = self.agent.go(self.agent.direction, test=True)
-                wumpus_loc.has_live_wumpus = False
+                wumpus_loc = self.agent.go(self.agent.direction, test=True).get_location()
+                wumpus_loc = self.world[wumpus_loc[0]][wumpus_loc[1]]
+                wumpus_loc.has_pit = False
+                wumpus_loc.has_obstacle = False
                 for row in range(len(self.world)):
                     for col in range(len(self.world[row])):
                         self.world[row][col].has_live_wumpus = False
@@ -172,14 +174,17 @@ class KB():
 
                     if smell == "Stench":
                         curr_loc.has_stench = True
-                        if loc.has_live_wumpus == "Maybe":
+                        if not curr_loc.has_visited and loc.has_live_wumpus == "Maybe":
                             loc.has_live_wumpus = True
+                            loc.has_pit = False
+                            loc.has_obstacle = False
 
                             # no other locations can have a wumpus
                             for row in range(len(self.world)):
                                 for col in range(len(self.world[row])):
-                                    if loc.has_live_wumpus != True:
-                                        loc.has_live_wumpus = False
+                                    room = self.world[row][col]
+                                    if room.has_live_wumpus != True:
+                                        room.has_live_wumpus = False
 
                         elif not loc.has_visited and loc.has_live_wumpus is None:
                             loc.has_live_wumpus = "Maybe"
@@ -312,8 +317,8 @@ class ashtabna_ExplorerAgent(ExplorerAgent):
                     elif not self.kb.is_safe(row, col):
                         unsafe_locs.append(location)
 
-                        if self.kb.has_wumpus(row, col):
-                            possible_wumpus_locs.append(location)
+                if self.kb.has_wumpus(row, col):
+                    possible_wumpus_locs.append(AgentState(row, col, UP))
 
         # if treasure here, grab and plan shortest route to exit
         if percept[2] == "Glitter":
@@ -330,8 +335,9 @@ class ashtabna_ExplorerAgent(ExplorerAgent):
         # if there is no safe route, guess where wumpus is and shoot
         if not self.plan and self.kb.has_arrow():
             plan = self.plan_shot(possible_wumpus_locs, safe_locs)
-            plan.append("Shoot")
-            self.plan.extend(plan)
+            if plan:
+                plan.append("Shoot")
+                self.plan.extend(plan)
 
         # if there is no way to safely shoot wumpus, go to potentially safe location
         if not self.plan:
