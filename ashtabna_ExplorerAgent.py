@@ -301,18 +301,19 @@ class ashtabna_ExplorerAgent(ExplorerAgent):
 
         for row in range(4):
             for col in range(4):
-                location = AgentState(row, col)
-                if self.kb.is_safe(row, col):
-                    safe_locs.append(location)
+                for direction in directions:
+                    location = AgentState(row, col, direction)
+                    if self.kb.is_safe(row, col):
+                        safe_locs.append(location)
 
-                    if not self.kb.is_visited(row, col):
-                        unvisited_safe_locs.append(location)
+                        if not self.kb.is_visited(row, col):
+                            unvisited_safe_locs.append(location)
 
-                elif not self.kb.is_safe(row, col):
-                    unsafe_locs.append(location)
+                    elif not self.kb.is_safe(row, col):
+                        unsafe_locs.append(location)
 
-                    if self.kb.has_wumpus(row, col):
-                        possible_wumpus_locs.append(location)
+                        if self.kb.has_wumpus(row, col):
+                            possible_wumpus_locs.append(location)
 
         # if treasure here, grab and plan shortest route to exit
         if percept[2] == "Glitter":
@@ -332,7 +333,7 @@ class ashtabna_ExplorerAgent(ExplorerAgent):
             plan.append("Shoot")
             self.plan.extend(plan)
 
-        # if there is no way to safely shoot wumpus
+        # if there is no way to safely shoot wumpus, go to potentially safe location
         if not self.plan:
             plan = self.make_plan(unsafe_locs, safe_locs)
             self.plan.extend(plan)
