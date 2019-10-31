@@ -70,6 +70,14 @@ class WumpusEnvironment(XYEnvironment):
             self._do_scream = False
         return (stench, breeze, glitter, bump, scream)
 
+    def get_risk_assessment(self):
+        risk = 0
+        for x in range(self.width):
+            for y in range(self.height):
+                if self.list_things_at((x, y), Pit):
+                    risk += 100
+        return risk
+
     def execute_action(self, agent, action):
         if action not in agent.possible_actions:
             logging.critical("Illegal action {}! Shutting down.".format(
@@ -83,6 +91,8 @@ class WumpusEnvironment(XYEnvironment):
                     logging.critical('You win!!! Total score: {}'.format(
                         agent.performance))
                 else:
+                    if agent.performance < 0:
+                        agent.performance += self.get_risk_assessment()
                     logging.critical('Goodbye -- total score: {}'.format(
                         agent.performance))
                 self._is_done_executing = True

@@ -122,7 +122,6 @@ class KB():
     def make_inference(self, percept, action):
         smell = percept[0]
         atmos = percept[1]
-        sight = percept[2]
         touch = percept[3]
         sound = percept[4]
         curr_loc = self.world[self.agent.x_pos][self.agent.y_pos]
