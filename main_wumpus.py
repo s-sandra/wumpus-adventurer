@@ -78,8 +78,8 @@ if do_suite:
     print('seed,score,num_steps')
     for i,(score, num_steps) in enumerate(results):
         print('{},{},{}'.format(seed+i,score,num_steps))
-    print('# Score: min {}, max {}, med {}'.format(min(scores),max(scores),
-        int(statistics.median(scores))))
+    print('# Score: min {}, max {}, mean {}'.format(min(scores),max(scores),
+        int(statistics.mean(scores))))
     print('# Num steps: min {}, max {}, med {}'.format(min(steps),max(steps),
         int(statistics.median(steps))))
 else:

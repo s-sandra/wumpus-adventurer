@@ -91,8 +91,8 @@ class WumpusEnvironment(XYEnvironment):
                     logging.critical('You win!!! Total score: {}'.format(
                         agent.performance))
                 else:
-                    if agent.performance < 0:
-                        agent.performance += self.get_risk_assessment()
+                    # if agent.performance < 0:
+                    #     agent.performance += self.get_risk_assessment()
                     logging.critical('Goodbye -- total score: {}'.format(
                         agent.performance))
                 self._is_done_executing = True

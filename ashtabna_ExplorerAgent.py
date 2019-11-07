@@ -5,11 +5,13 @@ Sandra Shtabnaya, University of Mary Washington, fall 2019
 from wumpus import ExplorerAgent
 import numpy as np
 import queue
+from itertools import combinations
 
 UP = 0
 DOWN = 90
 LEFT = 135
 RIGHT = 45
+PIT_PRIOR = 0.2 # the probability of a location having a pit
 directions = [UP, DOWN, LEFT, RIGHT]
 
 def is_valid(x, y):
@@ -45,6 +47,11 @@ class Inference:
                                                                                          self.has_obstacle,
                                                                                          self.has_pit)
 
+    def __eq__(self, other):
+        return self.x_pos == other.x_pos and self.y_pos == other.y_pos
+
+    def __hash__(self):
+        return hash((self.x_pos, self.y_pos))
 
 class KB():
 
@@ -94,6 +101,14 @@ class KB():
             return False
         return True
 
+    def is_maybe_safe(self, x, y):
+        if is_valid(x, y):
+            loc = self.world[x][y]
+
+        if loc.has_pit == "Maybe" or loc.has_live_wumpus == "Maybe":
+            return True
+        return False
+
     def is_visited(self, x, y):
         loc = None
         if is_valid(x, y):
@@ -118,6 +133,10 @@ class KB():
 
         self.make_inference(percept, action)
         loc.has_visited = True
+
+        # if we thought there was a pit here, but there's not
+        if loc.has_pit == "Maybe":
+            loc.has_pit = False
 
     def make_inference(self, percept, action):
         smell = percept[0]
@@ -298,6 +317,7 @@ class ashtabna_ExplorerAgent(ExplorerAgent):
 
         safe_locs = []
         unsafe_locs = []
+        maybe_unsafe_locs = []
         unvisited_safe_locs = []
         possible_wumpus_locs = []
 
@@ -315,6 +335,14 @@ class ashtabna_ExplorerAgent(ExplorerAgent):
 
                 if self.kb.has_wumpus(row, col):
                     possible_wumpus_locs.append(AgentState(row, col, UP))
+
+                if self.kb.is_maybe_safe(row, col):
+                    no_pit = Inference((row, col))
+                    no_pit.has_pit = False
+                    pit = Inference((row, col))
+                    pit.has_pit = True
+                    maybe_unsafe_locs.append(no_pit)
+                    maybe_unsafe_locs.append(pit)
 
         if self.plan:
             # check that next step in plan is still safe
@@ -342,6 +370,50 @@ class ashtabna_ExplorerAgent(ExplorerAgent):
             if plan is not None:
                 plan.append("Shoot")
                 self.plan = plan
+
+        # if there is no plan, take a risk
+        if not self.plan and maybe_unsafe_locs and not self.goal == "Exit":
+            pit_combs = combinations(maybe_unsafe_locs, len(set(maybe_unsafe_locs)))
+            probs = {}
+            for option in pit_combs:
+                unique_combo = set(option)
+                no_pits = []
+                if len(unique_combo) == len(option):
+                    if option[0].has_pit:
+                        prob = PIT_PRIOR
+                    else:
+                        prob = 1 - PIT_PRIOR
+                        no_pits.append(option[0])
+                    for square in option[1:]:
+                        if square.has_pit:
+                            prob = prob * PIT_PRIOR
+                        else:
+                            prob = prob * (1 - PIT_PRIOR)
+                            no_pits.append(square)
+
+                    if no_pits:
+                        for loc in no_pits:
+                            if loc in probs.keys():
+                                probs[loc].append(prob)
+                            else:
+                                probs[loc] = [prob]
+
+            joint_probs = {}
+            for key, value in probs.items():
+                joint_prob = sum(value)
+                joint_probs[key] = joint_prob
+
+            if joint_probs:
+                # get location with the highest probability of not having a pit
+                safest = max(joint_probs, key=joint_probs.get)
+            else:
+                # if only one possible unsafe location
+                safest = maybe_unsafe_locs[0]
+
+            for direction in directions:
+                goal = AgentState(safest.x_pos, safest.y_pos, direction)
+                safe_locs.append(goal)
+            self.plan = self.make_plan([goal], safe_locs)
 
         # if there is still no plan, climb out of cave
         if not self.plan:
