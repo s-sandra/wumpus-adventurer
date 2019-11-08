@@ -80,8 +80,16 @@ if do_suite:
         print('{},{},{}'.format(seed+i,score,num_steps))
     print('# Score: min {}, max {}, mean {}'.format(min(scores),max(scores),
         int(statistics.mean(scores))))
+    win = 0
+    death = 0
+    for i in scores:
+        if i > 0:
+            win += 1
+        elif i <= -1000:
+            death += 1
     print('# Num steps: min {}, max {}, med {}'.format(min(steps),max(steps),
         int(statistics.median(steps))))
+    print('Percent death: {}, Percent won: {}'.format(death/num_runs, win/num_runs))
 else:
     # Actually instantiate the student's agent.
     explorer = Explorer_class()

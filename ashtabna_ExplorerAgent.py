@@ -373,47 +373,16 @@ class ashtabna_ExplorerAgent(ExplorerAgent):
 
         # if there is no plan, take a risk
         if not self.plan and maybe_unsafe_locs and not self.goal == "Exit":
-            pit_combs = combinations(maybe_unsafe_locs, len(set(maybe_unsafe_locs)))
-            probs = {}
-            for option in pit_combs:
-                unique_combo = set(option)
-                no_pits = []
-                if len(unique_combo) == len(option):
-                    if option[0].has_pit:
-                        prob = PIT_PRIOR
-                    else:
-                        prob = 1 - PIT_PRIOR
-                        no_pits.append(option[0])
-                    for square in option[1:]:
-                        if square.has_pit:
-                            prob = prob * PIT_PRIOR
-                        else:
-                            prob = prob * (1 - PIT_PRIOR)
-                            no_pits.append(square)
+            probs = self.get_risk_probabilities(maybe_unsafe_locs)
 
-                    if no_pits:
-                        for loc in no_pits:
-                            if loc in probs.keys():
-                                probs[loc].append(prob)
-                            else:
-                                probs[loc] = [prob]
-
-            joint_probs = {}
-            for key, value in probs.items():
-                joint_prob = sum(value)
-                joint_probs[key] = joint_prob
-
-            if joint_probs:
+            if probs:
                 # get location with the highest probability of not having a pit
-                safest = max(joint_probs, key=joint_probs.get)
-            else:
-                # if only one possible unsafe location
-                safest = maybe_unsafe_locs[0]
+                safest = max(probs, key=probs.get)
 
-            for direction in directions:
-                goal = AgentState(safest.x_pos, safest.y_pos, direction)
-                safe_locs.append(goal)
-            self.plan = self.make_plan([goal], safe_locs)
+                for direction in directions:
+                    goal = AgentState(safest.x_pos, safest.y_pos, direction)
+                    safe_locs.append(goal)
+                self.plan = self.make_plan([goal], safe_locs)
 
         # if there is still no plan, climb out of cave
         if not self.plan:
@@ -423,6 +392,69 @@ class ashtabna_ExplorerAgent(ExplorerAgent):
 
         self.action = self.plan.pop(0)
         return self.action
+
+    def is_possible(self, world, query):
+        # checks that query square doesn't have pit in this world
+        if world[world.index(query)].has_pit:
+            return False
+
+        for square in world:
+            adjacent_squares = self.get_adjacent_pairs(square)
+            for pair in adjacent_squares:
+                if self.all_false(pair, world):
+                    return False
+        return True
+
+    def get_adjacent_pairs(self, square):
+        up_square = (square.x_pos - 1, square.y_pos + 1)
+        down_square = (square.x_pos + 1, square.y_pos - 1)
+        squares = []
+
+        if is_valid(up_square[0], up_square[1]):
+            squares.append((Inference(up_square), square))
+
+        if is_valid(down_square[0], down_square[1]):
+            squares.append((Inference(down_square), square))
+
+        return squares
+
+    def all_false(self, queries, world):
+        for loc in queries:
+            if loc in world:
+                square = world[world.index(loc)]
+            else:
+                return False
+            if square.has_pit:
+                return False
+        return True
+
+    def get_risk_probabilities(self, frontier):
+        probs = {} # stores probability of no pit for each square in frontier
+
+        for square in frontier:
+
+            # only compute probability for no pit
+            if square.has_pit:
+                continue
+
+            probs[square] = []
+            pit_combs = combinations(frontier, len(set(frontier)))
+
+            for world in pit_combs:
+                unique_combo = set(world) # removes combinations with repeated squares
+                prob = 1
+                if len(unique_combo) == len(world) and self.is_possible(world, square):
+                    for loc in world:
+                        if loc != square: # remove query square from consideration
+                            if loc.has_pit:
+                                prob = prob * PIT_PRIOR
+                            else:
+                                prob = prob * (1 - PIT_PRIOR)
+                    probs[square].append(prob)
+
+            probs[square] = sum(probs[square]) * (1 - PIT_PRIOR)
+
+        return probs
 
     def get_valid_actions(self, location):
         actions = ["TurnLeft", "TurnRight", "Forward"]
