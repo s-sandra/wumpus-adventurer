@@ -1,9 +1,6 @@
 # Wumpus Adventurer
 This graphical Wumpus World simulator, created by Stephen Davies and based on implementations from 
-[aimacode]( https://github.com/aimacode/aima-python), displays the actions of an `ExplorerAgent` object as it navigates through a 
-fictional grid world. [Wumpus World]( https://www.javatpoint.com/the-wumpus-world-in-artificial-intelligence) is a quintessential 
-AI toy problem, where an adventurer is tasked with finding gold in a partially-observable cave environment, all while avoiding 
-bottomless pits, walls and a deadly beast called the wumpus. For each play, the simulator randomly generates a new 4 x 4 world. 
+[aimacode](https://github.com/aimacode/aima-python/blob/master/agents.py), displays the actions of an `ExplorerAgent` object as it navigates through a fictional grid world. [Wumpus World]( https://www.javatpoint.com/the-wumpus-world-in-artificial-intelligence) is a quintessential AI toy problem, where an adventurer is tasked with finding gold in a partially-observable cave environment, all while avoiding bottomless pits, walls and a deadly beast called the wumpus. For each play, the simulator randomly generates a new 4 x 4 world. 
 Using Stephen’s existing framework, I inherited from the `ExplorerAgent` base class as `ashtabna_ExplorerAgent`, which contains 
 algorithms for representing knowledge and carrying out inferences, allowing the agent to make rational decisions.
 
